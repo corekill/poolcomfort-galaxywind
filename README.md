@@ -1,7 +1,7 @@
 # Pool Comfort / Galaxywind — local Home Assistant integration
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg?style=for-the-badge)](https://github.com/hacs/integration)
-[![Validate](https://img.shields.io/github/actions/workflow/status/jakubnovotny/poolcomfort-galaxywind/validate.yml?style=for-the-badge&label=HACS%20%2F%20hassfest)](https://github.com/jakubnovotny/poolcomfort-galaxywind/actions/workflows/validate.yml)
+[![Validate](https://img.shields.io/github/actions/workflow/status/corekill/poolcomfort-galaxywind/validate.yml?style=for-the-badge&label=HACS%20%2F%20hassfest)](https://github.com/corekill/poolcomfort-galaxywind/actions/workflows/validate.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg?style=for-the-badge)](https://www.python.org/)
 
@@ -19,10 +19,10 @@ speak the same protocol are welcome.
 
 ### Via HACS (recommended)
 
-[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=jakubnovotny&repository=poolcomfort-galaxywind&category=integration)
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=corekill&repository=poolcomfort-galaxywind&category=integration)
 
 1. Click the button above (or in HACS go to *⋮ → Custom repositories*, paste
-   `https://github.com/jakubnovotny/poolcomfort-galaxywind`, category
+   `https://github.com/corekill/poolcomfort-galaxywind`, category
    *Integration*).
 2. Find **Pool Comfort / Galaxywind heat pump** in HACS and *Download*.
 3. Restart Home Assistant.
