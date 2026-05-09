@@ -1,0 +1,11 @@
+{
+  "domain": "poolcomfort",
+  "name": "Pool Comfort Heat Pump",
+  "version": "0.1.0",
+  "documentation": "https://github.com/jakubnovotny/poolcomfort-local",
+  "issue_tracker": "https://github.com/jakubnovotny/poolcomfort-local/issues",
+  "codeowners": ["@jakubnovotny"],
+  "config_flow": true,
+  "iot_class": "local_polling",
+  "requirements": ["poolcomfort-local==0.1.0"]
+}

@@ -1,0 +1,27 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Pool Comfort tepelné čerpadlo",
+        "description": "Zadej IP adresu čerpadla a heslo zařízení (výchozí 123456).",
+        "data": {
+          "host": "IP adresa",
+          "password": "Heslo zařízení"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Nepodařilo se spojit s čerpadlem na dané adrese.",
+      "unknown": "Neočekávaná chyba při nastavení."
+    },
+    "abort": {
+      "already_configured": "Toto čerpadlo už je nakonfigurované."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "in_water_temp": { "name": "Teplota vstupní vody" },
+      "out_water_temp": { "name": "Teplota výstupní vody" }
+    }
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Pool Comfort heat pump",
+        "description": "Enter the heat pump IP address and the device password (default 123456).",
+        "data": {
+          "host": "Host",
+          "password": "Device password"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Could not reach the heat pump at the given address.",
+      "unknown": "Unexpected error during setup."
+    },
+    "abort": {
+      "already_configured": "This heat pump is already configured."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "in_water_temp": { "name": "Water inlet temperature" },
+      "out_water_temp": { "name": "Water outlet temperature" }
+    }
+  }
+}

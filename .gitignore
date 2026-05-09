@@ -1,0 +1,15 @@
+.venv*/
+__pycache__/
+.pytest_cache/
+*.egg-info/
+*.py[cod]
+
+# Local reverse-engineering artifacts
+*.pcap
+*.pcapng
+apk_poolcomfort/
+jadx_poolcomfort/
+pool_comfort.apk
+
+# OS/editor noise
+.DS_Store
