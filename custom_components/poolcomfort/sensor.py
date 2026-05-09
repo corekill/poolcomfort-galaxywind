@@ -15,10 +15,10 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
-from poolcomfort_local import PoolState
 
 from .const import DOMAIN
 from .coordinator import PoolComfortCoordinator
+from .protocol import PoolState
 
 
 @dataclass(frozen=True, kw_only=True)

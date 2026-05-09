@@ -1,11 +1,12 @@
 {
   "domain": "poolcomfort",
-  "name": "Pool Comfort Heat Pump",
+  "name": "Pool Comfort / Galaxywind heat pump",
   "version": "0.1.0",
-  "documentation": "https://github.com/jakubnovotny/poolcomfort-local",
-  "issue_tracker": "https://github.com/jakubnovotny/poolcomfort-local/issues",
+  "documentation": "https://github.com/jakubnovotny/poolcomfort-galaxywind",
+  "issue_tracker": "https://github.com/jakubnovotny/poolcomfort-galaxywind/issues",
   "codeowners": ["@jakubnovotny"],
   "config_flow": true,
   "iot_class": "local_polling",
-  "requirements": ["poolcomfort-local==0.1.0"]
+  "integration_type": "device",
+  "requirements": []
 }

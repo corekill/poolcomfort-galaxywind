@@ -31,6 +31,20 @@ pip install -e '.[pcap,test]'
 pytest
 ```
 
+## Code organisation
+
+The protocol/client code lives in two places:
+
+- `poolcomfort_local/{protocol.py,client.py}` — canonical library, used by the
+  CLI and `pip install -e .`.
+- `custom_components/poolcomfort/{protocol.py,client.py}` — a copy bundled
+  inside the Home Assistant integration so HACS users don't need to pip
+  install anything separately.
+
+When editing the protocol or client, **keep both copies in sync**. The two
+files should be byte-identical apart from any HA-specific tweaks. There is no
+build step that copies them automatically yet.
+
 ## Capture Review Checklist
 
 Before sharing a capture:

@@ -4,9 +4,10 @@ import logging
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
-from poolcomfort_local import PoolComfortClient, PoolState
 
+from .client import PoolComfortClient
 from .const import DEFAULT_SCAN_INTERVAL, DEFAULT_TIMEOUT, DOMAIN
+from .protocol import PoolState
 
 _LOGGER = logging.getLogger(__name__)
 

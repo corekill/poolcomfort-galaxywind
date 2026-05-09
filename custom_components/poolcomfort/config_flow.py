@@ -6,8 +6,8 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.const import CONF_HOST, CONF_PASSWORD
 from homeassistant.data_entry_flow import FlowResult
-from poolcomfort_local import PoolComfortClient
 
+from .client import PoolComfortClient
 from .const import DEFAULT_PASSWORD, DEFAULT_TIMEOUT, DOMAIN
 
 USER_SCHEMA = vol.Schema(

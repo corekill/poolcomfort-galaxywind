@@ -15,10 +15,10 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
-from poolcomfort_local import Mode
 
 from .const import DOMAIN, MAX_TEMP, MIN_TEMP
 from .coordinator import PoolComfortCoordinator
+from .protocol import Mode
 
 HVAC_MODE_TO_DEVICE: dict[HVACMode, Mode] = {
     HVACMode.AUTO: Mode.AUTO,
