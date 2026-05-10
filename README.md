@@ -1,9 +1,13 @@
-# Pool Comfort / Galaxywind — local Home Assistant integration
+# Pool Comfort / Galaxywind — local Home Assistant integration (HACS)
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg?style=for-the-badge)](https://github.com/hacs/integration)
 [![Validate](https://img.shields.io/github/actions/workflow/status/corekill/poolcomfort-galaxywind/validate.yml?style=for-the-badge&label=HACS%20%2F%20hassfest)](https://github.com/corekill/poolcomfort-galaxywind/actions/workflows/validate.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg?style=for-the-badge)](https://www.python.org/)
+
+> **Home Assistant custom component for Pool Comfort, Galaxywind and GWCD
+> swimming pool heat pumps.** Install via HACS, control your pool heat pump
+> locally — no cloud, no vendor account needed.
 
 Local UDP client and Home Assistant integration for **Pool Comfort** /
 **Galaxywind** / **GWCD** pool heat pumps. Reverse-engineered from the
@@ -11,7 +15,8 @@ Local UDP client and Home Assistant integration for **Pool Comfort** /
 on UDP `1194`. **No cloud, no vendor account.**
 
 Tested on a Pool Comfort unit; captures from other Galaxywind / GWCD pumps that
-speak the same protocol are welcome.
+speak the same protocol are welcome. If you have a pool heat pump that uses the
+**Pool Comfort** or **Galaxywind** mobile app, this integration should work.
 
 ---
 
