@@ -132,36 +132,41 @@ class PoolComfortClient:
         self._reader_thread = threading.Thread(target=self._reader_loop, name="poolcomfort-reader", daemon=True)
         self._reader_thread.start()
 
-        nonce = os.urandom(4)
-        response = self._send(
-            Packet(
-                marker=0x32,
-                sequence=0,
-                session=b"\x00\x00\x00\x00\x00",
-                message_type=MSG_HANDSHAKE_1,
-                payload=(
-                    bytes.fromhex("01010200")
-                    + nonce
-                    + self._discovery_token
-                    + bytes.fromhex("6ea8533f06364e95aa56caaac6358b06")
-                    + build_proto_tag()
-                ),
+        try:
+            nonce = os.urandom(4)
+            proto_tag = build_proto_tag()
+            response = self._send(
+                Packet(
+                    marker=0x32,
+                    sequence=0,
+                    session=b"\x00\x00\x00\x00\x00",
+                    message_type=MSG_HANDSHAKE_1,
+                    payload=(
+                        bytes.fromhex("01010200")
+                        + nonce
+                        + self._discovery_token
+                        + bytes.fromhex("6ea8533f06364e95aa56caaac6358b06")
+                        + proto_tag
+                    ),
+                )
             )
-        )
-        self._session = response.session
-        if not response.payload.startswith(bytes.fromhex("03000000")) or len(response.payload) < 8:
-            raise RuntimeError("heat pump returned an unexpected login challenge")
-        challenge = response.payload[4:8]
-        auth_response = build_auth_response(nonce, challenge, self.password)
-        payload = (
-            bytes.fromhex("04000003")
-            + auth_response
-            + APP_PROTO_TAG
-            + bytes.fromhex("00640004000000030065")
-            + len(APP_ID).to_bytes(2, "big")
-            + APP_ID
-        )
-        self._send(Packet(0x32, 0, self._session, MSG_HANDSHAKE_1, payload))
+            self._session = response.session
+            if not response.payload.startswith(bytes.fromhex("03000000")) or len(response.payload) < 8:
+                raise RuntimeError("heat pump returned an unexpected login challenge")
+            challenge = response.payload[4:8]
+            auth_response = build_auth_response(nonce, challenge, self.password)
+            payload = (
+                bytes.fromhex("04000003")
+                + auth_response
+                + proto_tag
+                + bytes.fromhex("00640004000000030065")
+                + len(APP_ID).to_bytes(2, "big")
+                + APP_ID
+            )
+            self._send(Packet(0x32, 0, self._session, MSG_HANDSHAKE_1, payload))
+        except Exception:
+            self.close()
+            raise
         with self._send_lock:
             self._sequence = -1
 

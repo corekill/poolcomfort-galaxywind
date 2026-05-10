@@ -58,3 +58,23 @@ def test_parse_pool_state_from_capture():
     assert state.power is True
     assert state.out_water_temp == 34
     assert state.in_water_temp == 31
+
+
+def test_parse_pool_state_temps_from_state_block():
+    import struct
+    state_block = struct.pack(">34h", 0, 230, 225, *([0] * 31))
+    payload = (
+        bytes.fromhex("080d0000")
+        + bytes.fromhex("0002000d00070024")
+        + bytes.fromhex("00000001")
+        + b"123456789012"
+        + (b"\x00" * 20)
+        + bytes.fromhex("0002000d00150044")
+        + state_block
+        + bytes.fromhex("0002000d00160004001f0000")
+        + bytes.fromhex("0002000d0018000400000000")
+    )
+    state = parse_pool_state(payload)
+    assert state.in_water_temp == 23.0
+    assert state.out_water_temp == 22.5
+    assert state.power is False

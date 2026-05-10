@@ -26,8 +26,8 @@ class PoolComfortCoordinator(DataUpdateCoordinator[PoolState]):
 
     def _fetch(self) -> PoolState:
         client = PoolComfortClient(self.host, password=self.password, timeout=DEFAULT_TIMEOUT)
-        client.connect()
         try:
+            client.connect()
             return client.query_state()
         finally:
             client.close()
@@ -38,8 +38,8 @@ class PoolComfortCoordinator(DataUpdateCoordinator[PoolState]):
 
     def _apply(self, action) -> None:
         client = PoolComfortClient(self.host, password=self.password, timeout=DEFAULT_TIMEOUT)
-        client.connect()
         try:
+            client.connect()
             action(client)
         finally:
             client.close()

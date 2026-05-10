@@ -99,8 +99,8 @@ class PoolState:
     target_temp: int | None = None
     mode: Mode | None = None
     power: bool | None = None
-    in_water_temp: int | None = None
-    out_water_temp: int | None = None
+    in_water_temp: float | None = None
+    out_water_temp: float | None = None
 
 
 def build_query_payload(device_type: int = DEVICE_TYPE_POOL_HEATPUMP, attr: int = ATTR_ALL) -> bytes:
@@ -157,8 +157,11 @@ def parse_pool_state(payload: bytes) -> PoolState:
                 mode = Mode(raw_mode)
         elif attr.attr == ATTR_POWER:
             power = bool(attr.value[0] if len(attr.value) >= 4 else attr.uint16_be())
+        elif attr.attr == ATTR_STATE_BLOCK and len(attr.value) >= 6:
+            words = struct.unpack_from(">3h", attr.value, 0)
+            in_water_temp = words[1] / 10
+            out_water_temp = words[2] / 10
         elif attr.attr == ATTR_RUNNING_TEMPS and len(attr.value) >= 8:
-            # Observed as four signed big-endian shorts, e.g. 0x22, 0x1f, 0x28, 0.
             out_water_temp, in_water_temp, *_ = struct.unpack(">hhhh", attr.value[:8])
 
     return PoolState(
