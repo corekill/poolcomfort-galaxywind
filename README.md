@@ -92,15 +92,15 @@ python -m venv .venv
 pip install -e .
 
 # Discover by serial, query state
-python -m poolcomfort_local.cli --serial 123456789012 --password 123456 status
+python -m poolcomfort_local.cli --serial <serial> --password 123456 status
 
 # Or by IP
-python -m poolcomfort_local.cli --host 192.168.1.x --password 123456 status
+python -m poolcomfort_local.cli --host <ip> --password 123456 status
 
 # Control
-python -m poolcomfort_local.cli --host 192.168.1.x --password 123456 power on
-python -m poolcomfort_local.cli --host 192.168.1.x --password 123456 set-temp 28
-python -m poolcomfort_local.cli --host 192.168.1.x --password 123456 set-mode 2
+python -m poolcomfort_local.cli --host <ip> --password 123456 power on
+python -m poolcomfort_local.cli --host <ip> --password 123456 set-temp 28
+python -m poolcomfort_local.cli --host <ip> --password 123456 set-mode 2
 ```
 
 Set-temp and set-mode require the pump to be powered on; the CLI checks first
@@ -110,8 +110,8 @@ PCAP analysis (needs `scapy`):
 
 ```bash
 pip install -e '.[pcap]'
-python scripts/pcap_dump.py poolcomfort-wide.pcap --pump 192.168.1.x
-python scripts/pcap_auth_pairs.py poolcomfort-wide.pcap --pump 192.168.1.x
+python scripts/pcap_dump.py capture.pcap --pump <ip>
+python scripts/pcap_auth_pairs.py capture.pcap --pump <ip>
 ```
 
 ---

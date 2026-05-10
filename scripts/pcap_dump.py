@@ -11,7 +11,7 @@ from poolcomfort_local.protocol import Packet, parse_pool_state
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("pcap")
-    parser.add_argument("--pump", default="192.168.1.x")
+    parser.add_argument("--pump", required=True, help="heat pump IP address")
     args = parser.parse_args()
 
     last = None

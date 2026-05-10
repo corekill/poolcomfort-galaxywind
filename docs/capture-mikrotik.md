@@ -5,14 +5,14 @@ your own addresses in place of the examples.
 
 Example addresses:
 
-- phone: `192.168.1.17`
+- phone: `192.168.1.y`
 - heat pump: `192.168.1.x`
 
 ## 1. Start a Filtered Capture
 
 ```routeros
 /tool/sniffer/stop
-/tool/sniffer/set file-name=poolcomfort-wide.pcap file-limit=8192KiB memory-limit=4096KiB only-headers=no filter-interface=all filter-ip-address=192.168.1.17,192.168.1.x
+/tool/sniffer/set file-name=poolcomfort-wide.pcap file-limit=8192KiB memory-limit=4096KiB only-headers=no filter-interface=all filter-ip-address=192.168.1.y,192.168.1.x
 /tool/sniffer/start
 ```
 
