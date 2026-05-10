@@ -48,7 +48,7 @@ def build_proto_tag(now: time.struct_time | None = None) -> bytes:
 # but the device sends it when it stops hearing from us; respond with a normal ping echo.
 PUMP_PROBE_OP = b"\x07"
 
-KEEPALIVE_INTERVAL = 3.0
+KEEPALIVE_INTERVAL = 1.5
 
 
 def discover_hosts(timeout: float = 2.0) -> list[str]:
