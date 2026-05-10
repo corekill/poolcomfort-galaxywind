@@ -44,7 +44,7 @@ def test_parse_pool_state_from_capture():
         bytes.fromhex("080d0000")
         + bytes.fromhex("0002000d00070024")
         + bytes.fromhex("00000001")
-        + b"123456789012"
+        + b"000000TEST01"
         + (b"\x00" * 20)
         + bytes.fromhex("0002000d00160004001f0000")
         + bytes.fromhex("0002000d0017000402000000")
@@ -52,7 +52,7 @@ def test_parse_pool_state_from_capture():
         + bytes.fromhex("0002000d002000080022001f00280000")
     )
     state = parse_pool_state(payload)
-    assert state.serial == "123456789012"
+    assert state.serial == "000000TEST01"
     assert state.target_temp == 31
     assert state.mode == Mode.HEATING
     assert state.power is True
@@ -67,7 +67,7 @@ def test_parse_pool_state_temps_from_state_block():
         bytes.fromhex("080d0000")
         + bytes.fromhex("0002000d00070024")
         + bytes.fromhex("00000001")
-        + b"123456789012"
+        + b"000000TEST01"
         + (b"\x00" * 20)
         + bytes.fromhex("0002000d00150044")
         + state_block
