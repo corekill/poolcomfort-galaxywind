@@ -1,9 +1,14 @@
 # Pool Comfort / Galaxywind — local Home Assistant integration (HACS)
 
+<p align="center">
+  <img src="custom_components/poolcomfort/logo.png" alt="Pool Comfort / Galaxywind pool heat pump – Home Assistant local integration" width="200">
+</p>
+
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg?style=for-the-badge)](https://github.com/hacs/integration)
 [![Validate](https://img.shields.io/github/actions/workflow/status/corekill/poolcomfort-galaxywind/validate.yml?style=for-the-badge&label=HACS%20%2F%20hassfest)](https://github.com/corekill/poolcomfort-galaxywind/actions/workflows/validate.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg?style=for-the-badge)](https://www.python.org/)
+[![Ko-fi](https://img.shields.io/badge/Ko--fi-Support%20this%20project-FF5E5B?style=for-the-badge&logo=ko-fi&logoColor=white)](https://ko-fi.com/corekill)
 
 > **Home Assistant custom component for Pool Comfort, Galaxywind and GWCD
 > swimming pool heat pumps.** Install via HACS, control your pool heat pump
@@ -55,8 +60,8 @@ You'll be asked for the heat pump IP and the device password (default
   number (diagnostic).
 - **Local-only** — all traffic stays on your LAN over UDP `1194`. No cloud
   account, no internet dependency.
-- **Polling** — 30 s by default. The integration uses a fresh UDP session per
-  poll, which avoids the firmware's short idle-session timeout.
+- **Polling** — 30 s by default. The integration maintains a single persistent
+  UDP session with keepalive pings, so only one session slot is used on the pump.
 
 ---
 
@@ -141,9 +146,9 @@ Full notes in [`docs/protocol.md`](docs/protocol.md).
 - **Working details bitfield** (compressor, fans, pressure switches…) is
   partially decoded inside state block `0x0015` but the bit-to-flag mapping is
   not finalised. Working on it.
-- **Long persistent sessions** — the firmware kills idle sessions in ~2 s
-  unless the captured app's exact ping cadence is reproduced. The integration
-  works around this by reconnecting per poll.
+- **Session keepalive** — the firmware kills idle sessions within seconds. The
+  integration keeps the session alive with periodic pings and automatically
+  reconnects if needed.
 - One physical unit tested. More captures from other devices would help.
 
 ---
@@ -162,6 +167,9 @@ Built from reverse-engineering the `com.gwcd.htc_en_oem` Android app and
 MikroTik LAN captures. Galaxywind / GWCD / Pool Comfort are trademarks of their
 respective owners; this project is not affiliated with or endorsed by any of
 them.
+
+If this integration saved you time or works well for you, consider
+[buying me a coffee](https://ko-fi.com/corekill).
 
 ## License
 
