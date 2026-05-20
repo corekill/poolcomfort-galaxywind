@@ -21,7 +21,8 @@
   "entity": {
     "sensor": {
       "in_water_temp": { "name": "Water inlet temperature" },
-      "out_water_temp": { "name": "Water outlet temperature" }
+      "out_water_temp": { "name": "Water outlet temperature" },
+      "ambient_temp": { "name": "Ambient temperature" }
     }
   }
 }

@@ -59,7 +59,7 @@ class PoolComfortClimate(CoordinatorEntity[PoolComfortCoordinator], ClimateEntit
     def __init__(self, coordinator: PoolComfortCoordinator, entry: ConfigEntry) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{entry.entry_id}_climate"
-        serial = coordinator.data.serial if coordinator.data else None
+        serial = coordinator.data.state.serial if coordinator.data else None
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, serial or entry.entry_id)},
             name="Pool Comfort heat pump",
@@ -70,17 +70,17 @@ class PoolComfortClimate(CoordinatorEntity[PoolComfortCoordinator], ClimateEntit
 
     @property
     def current_temperature(self) -> float | None:
-        return self.coordinator.data.in_water_temp
+        return self.coordinator.data.state.in_water_temp
 
     @property
     def target_temperature(self) -> float | None:
-        return self.coordinator.data.target_temp
+        return self.coordinator.data.state.target_temp
 
     @property
     def hvac_mode(self) -> HVACMode:
-        if not self.coordinator.data.power:
+        if not self.coordinator.data.state.power:
             return HVACMode.OFF
-        return DEVICE_TO_HVAC_MODE.get(self.coordinator.data.mode, HVACMode.AUTO)
+        return DEVICE_TO_HVAC_MODE.get(self.coordinator.data.state.mode, HVACMode.AUTO)
 
     async def async_set_temperature(self, **kwargs: Any) -> None:
         new_mode = kwargs.get(ATTR_HVAC_MODE)
@@ -92,7 +92,7 @@ class PoolComfortClimate(CoordinatorEntity[PoolComfortCoordinator], ClimateEntit
         target = int(round(float(temp)))
 
         def action(client) -> None:
-            if not self.coordinator.data.power and new_mode != HVACMode.OFF:
+            if not self.coordinator.data.state.power and new_mode != HVACMode.OFF:
                 client.set_power(True)
             client.set_target_temp(target)
 
@@ -107,7 +107,7 @@ class PoolComfortClimate(CoordinatorEntity[PoolComfortCoordinator], ClimateEntit
             return
 
         def action(client) -> None:
-            if not self.coordinator.data.power:
+            if not self.coordinator.data.state.power:
                 client.set_power(True)
             client.set_mode(int(device_mode))
 

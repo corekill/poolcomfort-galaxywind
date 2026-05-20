@@ -22,9 +22,11 @@ from .protocol import (
     OP_ACK_NOTIFY,
     OP_NOTIFY,
     Packet,
+    PoolDiagnostics,
     PoolState,
     build_query_payload,
     build_set_payload,
+    parse_pool_diagnostics,
     parse_pool_state,
 )
 
@@ -192,6 +194,10 @@ class PoolComfortClient:
     def query_state(self) -> PoolState:
         packet = self.send_data(build_query_payload(DEVICE_TYPE_POOL_HEATPUMP, ATTR_ALL))
         return parse_pool_state(packet.payload)
+
+    def query_diagnostics(self) -> PoolDiagnostics:
+        packet = self.send_data(build_query_payload(DEVICE_TYPE_POOL_HEATPUMP, ATTR_ALL))
+        return parse_pool_diagnostics(packet.payload)
 
     def set_target_temp(self, temp: int) -> Packet:
         reply = self.send_data(build_set_payload(ATTR_TARGET_TEMP, temp))
