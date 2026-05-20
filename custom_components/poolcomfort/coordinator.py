@@ -8,12 +8,12 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 
 from .client import PoolComfortClient
 from .const import DEFAULT_SCAN_INTERVAL, DEFAULT_TIMEOUT, DOMAIN
-from .protocol import PoolState
+from .protocol import PoolDiagnostics
 
 _LOGGER = logging.getLogger(__name__)
 
 
-class PoolComfortCoordinator(DataUpdateCoordinator[PoolState]):
+class PoolComfortCoordinator(DataUpdateCoordinator[PoolDiagnostics]):
     def __init__(self, hass: HomeAssistant, host: str, password: str) -> None:
         super().__init__(hass, _LOGGER, name=DOMAIN, update_interval=DEFAULT_SCAN_INTERVAL)
         self.host = host
@@ -21,7 +21,7 @@ class PoolComfortCoordinator(DataUpdateCoordinator[PoolState]):
         self._client: PoolComfortClient | None = None
         self._client_lock = threading.Lock()
 
-    async def _async_update_data(self) -> PoolState:
+    async def _async_update_data(self) -> PoolDiagnostics:
         try:
             return await self.hass.async_add_executor_job(self._fetch)
         except Exception as exc:
@@ -40,15 +40,19 @@ class PoolComfortCoordinator(DataUpdateCoordinator[PoolState]):
             self._client.close()
             self._client = None
 
-    def _fetch(self) -> PoolState:
+    def _fetch(self) -> PoolDiagnostics:
         with self._client_lock:
             try:
                 client = self._ensure_client()
-                return client.query_state()
+                return client.query_diagnostics()
             except Exception:
                 self._close_client()
+            try:
                 client = self._ensure_client()
-                return client.query_state()
+                return client.query_diagnostics()
+            except Exception:
+                self._close_client()
+                raise
 
     async def async_apply(self, action) -> None:
         await self.hass.async_add_executor_job(self._apply, action)
@@ -61,8 +65,12 @@ class PoolComfortCoordinator(DataUpdateCoordinator[PoolState]):
                 action(client)
             except Exception:
                 self._close_client()
+            try:
                 client = self._ensure_client()
                 action(client)
+            except Exception:
+                self._close_client()
+                raise
 
     def shutdown(self) -> None:
         with self._client_lock:

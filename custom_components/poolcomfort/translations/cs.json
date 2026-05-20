@@ -21,7 +21,8 @@
   "entity": {
     "sensor": {
       "in_water_temp": { "name": "Teplota vstupní vody" },
-      "out_water_temp": { "name": "Teplota výstupní vody" }
+      "out_water_temp": { "name": "Teplota výstupní vody" },
+      "ambient_temp": { "name": "Teplota okolí" }
     }
   }
 }

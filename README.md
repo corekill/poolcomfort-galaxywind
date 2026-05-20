@@ -56,8 +56,10 @@ You'll be asked for the heat pump IP and the device password (default
 
 - **Climate entity** — target temperature, HVAC mode (off / auto / heat /
   cool), current water temperature.
-- **Sensors** — water inlet temperature, water outlet temperature, serial
-  number (diagnostic).
+- **Sensors** — water inlet temperature, water outlet temperature, ambient
+  temperature, serial number, device status and raw state block diagnostics.
+- **Binary diagnostic sensors** — compressor, high/low fan speed, circulation
+  pump, four-way valve, pressure/flow switches and related working details.
 - **Local-only** — all traffic stays on your LAN over UDP `1194`. No cloud
   account, no internet dependency.
 - **Polling** — 30 s by default. The integration maintains a single persistent
@@ -106,6 +108,7 @@ python -m poolcomfort_local.cli --serial <serial> --password 123456 status
 
 # Or by IP
 python -m poolcomfort_local.cli --host <ip> --password 123456 status
+python -m poolcomfort_local.cli --host <ip> --password 123456 diagnostics
 
 # Control
 python -m poolcomfort_local.cli --host <ip> --password 123456 power on
@@ -143,9 +146,10 @@ Full notes in [`docs/protocol.md`](docs/protocol.md).
 
 ## Status / known limits
 
-- **Working details bitfield** (compressor, fans, pressure switches…) is
-  partially decoded inside state block `0x0015` but the bit-to-flag mapping is
-  not finalised. Working on it.
+- **Working details bitfield** is decoded from the same `pump_info` / `fault2`
+  logic used by the Android app. The current mapping is verified on one Pool
+  Comfort unit and kept alongside raw diagnostic words for easier validation on
+  other OEM models.
 - **Session keepalive** — the firmware kills idle sessions within seconds. The
   integration keeps the session alive with periodic pings and automatically
   reconnects if needed.

@@ -1,5 +1,7 @@
+import struct
+
 from poolcomfort_local.client import build_auth_response
-from poolcomfort_local.protocol import Packet, Mode, build_set_payload, parse_pool_state
+from poolcomfort_local.protocol import Packet, Mode, build_set_payload, parse_pool_diagnostics, parse_pool_state
 
 
 def test_packet_roundtrip():
@@ -78,3 +80,53 @@ def test_parse_pool_state_temps_from_state_block():
     assert state.in_water_temp == 23.0
     assert state.out_water_temp == 22.5
     assert state.power is False
+
+
+def test_parse_pool_diagnostics_exposes_attributes():
+    payload = (
+        bytes.fromhex("080d0000")
+        + bytes.fromhex("0002000d00070024")
+        + bytes.fromhex("00000001")
+        + b"123456789012"
+        + (b"\x00" * 20)
+        + bytes.fromhex("0002000d00150044")
+        + struct.pack(">34h", 0, 250, 260, 190, *([0] * 30))
+        + bytes.fromhex("0002000d0016000400200000")
+        + bytes.fromhex("0002000d0017000402490020")
+        + bytes.fromhex("0002000d0018000401490020")
+    )
+    diagnostics = parse_pool_diagnostics(payload)
+    assert diagnostics.state.serial == "123456789012"
+    assert diagnostics.state.target_temp == 32
+    assert diagnostics.attributes["0x0015"]["name"] == "state_block"
+    assert diagnostics.attributes["0x0015"]["decoded"]["water_in_temperature_c"] == 25.0
+    assert diagnostics.attributes["0x0015"]["decoded"]["water_out_temperature_c"] == 26.0
+    assert diagnostics.attributes["0x0015"]["decoded"]["ambient_temperature_c"] == 19.0
+    assert diagnostics.attributes["0x0017"]["decoded"]["mode_name"] == "heating"
+    assert diagnostics.attributes["0x0018"]["decoded"]["power"] is True
+
+
+def test_parse_pool_working_details_from_state_block():
+    words = [0] * 34
+    words[1] = 250
+    words[2] = 260
+    words[3] = 190
+    words[6] = 1 << 1
+    words[22] = (1 << 0) | (1 << 7) | (1 << 9) | (1 << 10) | (1 << 11)
+    words[24] = (1 << 2) | (1 << 3)
+    payload = (
+        bytes.fromhex("080d0000")
+        + bytes.fromhex("0002000d00150044")
+        + struct.pack(">34h", *words)
+    )
+    diagnostics = parse_pool_diagnostics(payload)
+    decoded = diagnostics.attributes["0x0015"]["decoded"]
+    details = decoded["working_details"]
+    assert decoded["run_state_name"] == "heating"
+    assert details["compressor"] is True
+    assert details["high_fan_speed"] is True
+    assert details["low_fan_speed"] is False
+    assert details["circulation_pump"] is True
+    assert details["four_way_valve"] is True
+    assert details["waterflow_switch"] is True
+    assert details["high_pressure_switch"] is True
