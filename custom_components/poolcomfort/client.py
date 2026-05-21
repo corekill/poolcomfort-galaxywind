@@ -275,12 +275,20 @@ class PoolComfortClient:
         if self._is_notify(reply):
             self._ack_notify(reply)
             return
+        # Reply to pump-initiated keepalive probes (payload starts with 0x07).
+        # The pump sends these when it wants confirmation the client is alive;
+        # not answering eventually causes the pump to mark the session dead.
+        if (
+            reply.message_type == MSG_PING
+            and len(reply.payload) >= 1
+            and reply.payload[0] == 0x07
+        ):
+            self._reply_to_pump_ping(reply)
+            return
         key = (reply.sequence, reply.message_type)
         with self._pending_lock:
             slot = self._pending.get(key)
             if slot is None:
-                # Unsolicited packets land here (pump-side keepalive op 0x0700, stray pongs).
-                # Replying to op 0x0700 with op 0x0200 floods us with more 0x0700, so just drop it.
                 return
             slot.reply = reply
             slot.event.set()
