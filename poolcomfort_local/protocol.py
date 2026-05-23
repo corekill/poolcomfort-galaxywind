@@ -2,8 +2,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import IntEnum
+import logging
 from typing import Any
 import struct
+
+_LOGGER = logging.getLogger(__name__)
 
 
 DISCOVERY_PORT = 8818
@@ -192,7 +195,21 @@ def parse_pool_diagnostics(payload: bytes) -> PoolDiagnostics:
         if attr.device_type != DEVICE_TYPE_POOL_HEATPUMP:
             continue
         key = f"0x{attr.attr:04x}"
-        attributes[key] = describe_attribute(attr)
+        try:
+            attributes[key] = describe_attribute(attr)
+        except Exception:  # noqa: BLE001
+            # Never let a single attribute parsing error kill the whole fetch
+            # (and the healthy UDP session behind it).  Log a safe fallback so
+            # the attribute at least shows up in diagnostics.
+            _LOGGER.debug(
+                "Failed to parse attribute 0x%04x (%d bytes), keeping raw",
+                attr.attr, len(attr.value), exc_info=True,
+            )
+            attributes[key] = {
+                "name": ATTRIBUTE_NAMES.get(attr.attr, f"error_0x{attr.attr:04x}"),
+                "raw": attr.value.hex(),
+                "parse_error": True,
+            }
     return PoolDiagnostics(state=parse_pool_state(payload), attributes=attributes)
 
 
@@ -292,7 +309,7 @@ def _decode_attribute(attr: Attribute) -> dict[str, Any]:
         return decoded
     if attr.attr == ATTR_POWER and attr.value:
         return {"power": bool(attr.value[0] if len(attr.value) >= 4 else attr.uint16_be())}
-    if attr.attr == ATTR_STATE_BLOCK and len(attr.value) >= 8:
+    if attr.attr == ATTR_STATE_BLOCK and len(attr.value) >= 14:
         words = _words(attr.value, signed=True, byteorder="big")
         return _decode_pool_state_block(words)
     if attr.attr == ATTR_RUNNING_TEMPS and len(attr.value) >= 8:

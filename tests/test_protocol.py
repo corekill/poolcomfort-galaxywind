@@ -106,6 +106,42 @@ def test_parse_pool_diagnostics_exposes_attributes():
     assert diagnostics.attributes["0x0018"]["decoded"]["power"] is True
 
 
+def test_parse_pool_diagnostics_survives_short_state_block():
+    """A state block shorter than 14 bytes must not crash parse_pool_diagnostics.
+
+    Before the fix, a 4-word (8-byte) state block passed the old ``>= 8`` guard
+    but ``_decode_pool_state_block`` accessed ``words[4..6]`` → IndexError →
+    killed the healthy UDP session.
+    """
+    short_state_block = struct.pack(">4h", 250, 260, 190, 0)  # 8 bytes, only 4 words
+    payload = (
+        bytes.fromhex("080d0000")
+        + bytes.fromhex("0002000d00150008")  # attr 0x0015, length=8
+        + short_state_block
+        + bytes.fromhex("0002000d00160004001f0000")
+    )
+    diagnostics = parse_pool_diagnostics(payload)
+    # Should NOT crash. The short block won't have a decoded dict, but
+    # the attribute should still appear with its raw hex.
+    assert "0x0015" in diagnostics.attributes
+    assert diagnostics.state.target_temp == 31
+
+
+def test_parse_pool_diagnostics_survives_corrupt_attribute():
+    """A corrupt attribute value must not crash the whole diagnostics parse."""
+    payload = (
+        bytes.fromhex("080d0000")
+        # A fake attribute with attr=0xBEEF and 1 byte of value (odd length
+        # will trip the uint16 helpers if called).
+        + bytes.fromhex("0002000dbeef000100")
+        + bytes.fromhex("0002000d00160004001f0000")
+    )
+    diagnostics = parse_pool_diagnostics(payload)
+    # The corrupt attribute should be present with parse_error flag.
+    assert "0xbeef" in diagnostics.attributes
+    assert diagnostics.state.target_temp == 31
+
+
 def test_parse_pool_working_details_from_state_block():
     words = [0] * 34
     words[1] = 250
