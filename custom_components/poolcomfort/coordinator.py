@@ -14,10 +14,11 @@ from .protocol import PoolDiagnostics
 _LOGGER = logging.getLogger(__name__)
 
 # Minimum seconds between reconnect attempts to avoid flooding the pump's
-# session table.  The pump has a finite number of session slots and does not
-# release dead sessions immediately; limiting the reconnect rate keeps us well
-# below that limit even if the link is flaky for hours.
-RECONNECT_COOLDOWN = 60.0
+# session table. The pump has a finite number of session slots and does not
+# release dead sessions immediately. Repeated failed handshakes can allocate
+# half-open sessions, so back off progressively when the pump refuses login.
+RECONNECT_BASE_COOLDOWN = 60.0
+RECONNECT_MAX_COOLDOWN = 30 * 60.0
 
 
 class PoolComfortCoordinator(DataUpdateCoordinator[PoolDiagnostics]):
@@ -27,7 +28,8 @@ class PoolComfortCoordinator(DataUpdateCoordinator[PoolDiagnostics]):
         self.password = password
         self._client: PoolComfortClient | None = None
         self._client_lock = threading.Lock()
-        self._last_connect: float = 0.0
+        self._last_connect_attempt: float = 0.0
+        self._connect_failures = 0
 
     async def _async_update_data(self) -> PoolDiagnostics:
         try:
@@ -39,17 +41,36 @@ class PoolComfortCoordinator(DataUpdateCoordinator[PoolDiagnostics]):
         if self._client is not None:
             return self._client
         now = time.monotonic()
-        elapsed = now - self._last_connect
-        if elapsed < RECONNECT_COOLDOWN:
+        cooldown = self._reconnect_cooldown()
+        elapsed = now - self._last_connect_attempt
+        if elapsed < cooldown:
             raise RuntimeError(
-                f"reconnect cooldown: {RECONNECT_COOLDOWN - elapsed:.0f}s remaining"
+                f"reconnect cooldown: {cooldown - elapsed:.0f}s remaining"
             )
-        self._last_connect = now
+        self._last_connect_attempt = now
         _LOGGER.debug("Opening new session to %s", self.host)
         client = PoolComfortClient(self.host, password=self.password, timeout=DEFAULT_TIMEOUT)
-        client.connect()
+        try:
+            client.connect()
+        except Exception:
+            self._connect_failures += 1
+            _LOGGER.warning(
+                "Failed to open Pool Comfort session to %s; reconnect cooldown is now %.0fs",
+                self.host,
+                self._reconnect_cooldown(),
+            )
+            raise
+        self._connect_failures = 0
         self._client = client
         return client
+
+    def _reconnect_cooldown(self) -> float:
+        if self._connect_failures <= 0:
+            return RECONNECT_BASE_COOLDOWN
+        return min(
+            RECONNECT_MAX_COOLDOWN,
+            RECONNECT_BASE_COOLDOWN * (2 ** min(self._connect_failures, 5)),
+        )
 
     def _close_client(self) -> None:
         if self._client is not None:

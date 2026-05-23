@@ -152,7 +152,8 @@ Full notes in [`docs/protocol.md`](docs/protocol.md).
   other OEM models.
 - **Session keepalive** — the firmware kills idle sessions within seconds. The
   integration keeps the session alive with periodic pings and automatically
-  reconnects if needed.
+  reconnects if needed. Failed reconnects use exponential backoff so a flaky or
+  wedged pump is not flooded with half-open login sessions.
 - One physical unit tested. More captures from other devices would help.
 
 ---
