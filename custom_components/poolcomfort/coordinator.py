@@ -28,7 +28,7 @@ class PoolComfortCoordinator(DataUpdateCoordinator[PoolDiagnostics]):
         self.password = password
         self._client: PoolComfortClient | None = None
         self._client_lock = threading.Lock()
-        self._last_connect_attempt: float = 0.0
+        self._last_connect_attempt: float = -RECONNECT_BASE_COOLDOWN
         self._connect_failures = 0
 
     async def _async_update_data(self) -> PoolDiagnostics:
