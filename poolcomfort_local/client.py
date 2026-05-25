@@ -127,6 +127,7 @@ class PoolComfortClient:
         self.discover()
         self.close()
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         sock.settimeout(0.5)
         sock.bind(("", self.local_port))
         self._sock = sock
