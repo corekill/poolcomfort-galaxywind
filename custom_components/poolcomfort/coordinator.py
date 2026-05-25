@@ -30,6 +30,8 @@ class PoolComfortCoordinator(DataUpdateCoordinator[PoolDiagnostics]):
         self._client_lock = threading.Lock()
         self._last_connect_attempt: float = -RECONNECT_BASE_COOLDOWN
         self._connect_failures = 0
+        self._consecutive_timeouts = 0
+        self._last_local_port = 0
 
     async def _async_update_data(self) -> PoolDiagnostics:
         try:
@@ -48,8 +50,8 @@ class PoolComfortCoordinator(DataUpdateCoordinator[PoolDiagnostics]):
                 f"reconnect cooldown: {cooldown - elapsed:.0f}s remaining"
             )
         self._last_connect_attempt = now
-        _LOGGER.debug("Opening new session to %s", self.host)
-        client = PoolComfortClient(self.host, password=self.password, timeout=DEFAULT_TIMEOUT)
+        _LOGGER.debug("Opening new session to %s (local port %s)", self.host, self._last_local_port or "auto")
+        client = PoolComfortClient(self.host, password=self.password, timeout=DEFAULT_TIMEOUT, local_port=self._last_local_port)
         try:
             client.connect()
         except Exception:
@@ -62,6 +64,14 @@ class PoolComfortCoordinator(DataUpdateCoordinator[PoolDiagnostics]):
             raise
         self._connect_failures = 0
         self._client = client
+        # Remember the local port so reconnections reuse it. The pump may
+        # identify sessions partly by source port; reusing it lets the pump
+        # reclaim the old slot instead of allocating a new one.
+        if client._sock is not None:
+            try:
+                self._last_local_port = client._sock.getsockname()[1]
+            except OSError:
+                pass
         return client
 
     def _reconnect_cooldown(self) -> float:
@@ -74,6 +84,12 @@ class PoolComfortCoordinator(DataUpdateCoordinator[PoolDiagnostics]):
 
     def _close_client(self) -> None:
         if self._client is not None:
+            # Save the local port before closing so we can reuse it.
+            if self._client._sock is not None:
+                try:
+                    self._last_local_port = self._client._sock.getsockname()[1]
+                except OSError:
+                    pass
             self._client.close()
             self._client = None
 
@@ -81,8 +97,33 @@ class PoolComfortCoordinator(DataUpdateCoordinator[PoolDiagnostics]):
         with self._client_lock:
             try:
                 client = self._ensure_client()
-                return client.query_diagnostics()
+                result = client.query_diagnostics()
+                self._consecutive_timeouts = 0
+                return result
+            except TimeoutError:
+                # Pump didn't respond but the UDP session is likely still
+                # alive on the pump side.  Closing here would orphan the
+                # pump-side session (UDP has no FIN) and burn a session
+                # slot.  Keep the session and let the next 30 s poll retry.
+                self._consecutive_timeouts += 1
+                if self._consecutive_timeouts >= 4:
+                    _LOGGER.warning(
+                        "%d consecutive timeouts from %s; assuming session "
+                        "is dead, will reconnect on next poll",
+                        self._consecutive_timeouts,
+                        self.host,
+                    )
+                    self._close_client()
+                    self._consecutive_timeouts = 0
+                else:
+                    _LOGGER.debug(
+                        "Timeout %d/4 from %s, keeping session alive",
+                        self._consecutive_timeouts,
+                        self.host,
+                    )
+                raise
             except Exception:
+                self._consecutive_timeouts = 0
                 self._close_client()
                 raise
 
@@ -95,7 +136,15 @@ class PoolComfortCoordinator(DataUpdateCoordinator[PoolDiagnostics]):
             try:
                 client = self._ensure_client()
                 action(client)
+                self._consecutive_timeouts = 0
+            except TimeoutError:
+                self._consecutive_timeouts += 1
+                if self._consecutive_timeouts >= 4:
+                    self._close_client()
+                    self._consecutive_timeouts = 0
+                raise
             except Exception:
+                self._consecutive_timeouts = 0
                 self._close_client()
                 raise
 
