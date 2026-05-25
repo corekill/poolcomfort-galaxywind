@@ -20,6 +20,11 @@ _LOGGER = logging.getLogger(__name__)
 RECONNECT_BASE_COOLDOWN = 60.0
 RECONNECT_MAX_COOLDOWN = 30 * 60.0
 
+# If the pump hasn't sent any packet for this long despite our 1.5 s
+# keepalive pings, the session is almost certainly dead.  Must be longer
+# than DEFAULT_SCAN_INTERVAL so a normal polling gap doesn't trigger it.
+SESSION_STALE_SECONDS = 45.0
+
 
 class PoolComfortCoordinator(DataUpdateCoordinator[PoolDiagnostics]):
     def __init__(self, hass: HomeAssistant, host: str, password: str) -> None:
@@ -93,28 +98,57 @@ class PoolComfortCoordinator(DataUpdateCoordinator[PoolDiagnostics]):
             self._client.close()
             self._client = None
 
+    def _is_session_stale(self) -> bool:
+        """True when the pump stopped responding despite our keepalive pings."""
+        client = self._client
+        if client is None or client._last_recv == 0:
+            return False
+        return (time.monotonic() - client._last_recv) > SESSION_STALE_SECONDS
+
     def _fetch(self) -> PoolDiagnostics:
         with self._client_lock:
+            # --- proactive staleness check ---
+            # Our keepalive thread pings the pump every 1.5 s and the reader
+            # thread timestamps every received packet.  If nothing came back
+            # for SESSION_STALE_SECONDS the session is dead on the pump side.
+            # Close and reconnect *immediately* (no cooldown — the pump
+            # already freed the slot when it expired our session).
+            if self._is_session_stale():
+                silence = time.monotonic() - self._client._last_recv  # type: ignore[union-attr]
+                _LOGGER.info(
+                    "Session to %s stale (no packet for %.0fs), reconnecting",
+                    self.host,
+                    silence,
+                )
+                self._close_client()
+                # This was a normal session expiry, not a connect failure.
+                # Allow immediate reconnect — no backoff needed.
+                self._connect_failures = 0
+                self._last_connect_attempt = 0
+                self._consecutive_timeouts = 0
+
             try:
                 client = self._ensure_client()
                 result = client.query_diagnostics()
                 self._consecutive_timeouts = 0
                 return result
             except TimeoutError:
-                # Pump didn't respond but the UDP session is likely still
-                # alive on the pump side.  Closing here would orphan the
-                # pump-side session (UDP has no FIN) and burn a session
-                # slot.  Keep the session and let the next 30 s poll retry.
+                # Pump didn't respond but the UDP session might still be
+                # alive on the pump side.  Don't tear it down yet — the
+                # staleness check above will catch truly dead sessions on
+                # the next poll cycle.
                 self._consecutive_timeouts += 1
                 if self._consecutive_timeouts >= 4:
                     _LOGGER.warning(
-                        "%d consecutive timeouts from %s; assuming session "
-                        "is dead, will reconnect on next poll",
+                        "%d consecutive timeouts from %s; forcing reconnect",
                         self._consecutive_timeouts,
                         self.host,
                     )
                     self._close_client()
                     self._consecutive_timeouts = 0
+                    # Session was dead — allow immediate reconnect.
+                    self._connect_failures = 0
+                    self._last_connect_attempt = 0
                 else:
                     _LOGGER.debug(
                         "Timeout %d/4 from %s, keeping session alive",
@@ -133,6 +167,11 @@ class PoolComfortCoordinator(DataUpdateCoordinator[PoolDiagnostics]):
 
     def _apply(self, action) -> None:
         with self._client_lock:
+            if self._is_session_stale():
+                self._close_client()
+                self._connect_failures = 0
+                self._last_connect_attempt = 0
+                self._consecutive_timeouts = 0
             try:
                 client = self._ensure_client()
                 action(client)
@@ -142,6 +181,8 @@ class PoolComfortCoordinator(DataUpdateCoordinator[PoolDiagnostics]):
                 if self._consecutive_timeouts >= 4:
                     self._close_client()
                     self._consecutive_timeouts = 0
+                    self._connect_failures = 0
+                    self._last_connect_attempt = 0
                 raise
             except Exception:
                 self._consecutive_timeouts = 0

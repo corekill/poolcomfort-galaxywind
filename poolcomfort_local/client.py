@@ -109,6 +109,7 @@ class PoolComfortClient:
         self._reader_thread: threading.Thread | None = None
         self._keepalive_thread: threading.Thread | None = None
         self._last_send = 0.0
+        self._last_recv = 0.0
 
     def discover(self) -> bytes:
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -273,6 +274,7 @@ class PoolComfortClient:
             self._handle_reply(reply)
 
     def _handle_reply(self, reply: Packet) -> None:
+        self._last_recv = time.monotonic()
         if self._is_notify(reply):
             self._ack_notify(reply)
             return
