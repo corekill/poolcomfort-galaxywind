@@ -96,6 +96,7 @@ class PoolComfortClient:
     password: str = "123456"
     local_port: int = 0
     timeout: float = 2.0
+    keepalive: bool = True
 
     def __post_init__(self) -> None:
         self._sequence = 0
@@ -174,8 +175,9 @@ class PoolComfortClient:
         with self._send_lock:
             self._sequence = -1
 
-        self._keepalive_thread = threading.Thread(target=self._keepalive_loop, name="poolcomfort-keepalive", daemon=True)
-        self._keepalive_thread.start()
+        if self.keepalive:
+            self._keepalive_thread = threading.Thread(target=self._keepalive_loop, name="poolcomfort-keepalive", daemon=True)
+            self._keepalive_thread.start()
 
     def close(self) -> None:
         self._stop.set()
