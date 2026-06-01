@@ -13,12 +13,17 @@ from .protocol import PoolDiagnostics
 
 _LOGGER = logging.getLogger(__name__)
 
-# After a failed connect attempt the pump's session table is likely full.
-# Each half-open slot takes the firmware several minutes to reclaim, so
-# retrying sooner just burns another slot.  Start with a 5-minute wait
-# (long enough for the pump to free at least one slot) and cap at 10 min.
-RECONNECT_BASE_COOLDOWN = 5 * 60.0
-RECONNECT_MAX_COOLDOWN = 10 * 60.0
+# Cooldown between *polling* reconnect attempts after a failed handshake.
+# Grows linearly (1 min × failures) to avoid pounding a pump that's still
+# busy freeing slots, capped at 3 min so we always recover within a few
+# minutes once the pump becomes available again.
+RECONNECT_BASE_COOLDOWN = 60.0
+RECONNECT_MAX_COOLDOWN = 3 * 60.0
+
+# If we've been failing for this long, drop the failure counter and start
+# fresh.  Prevents permanent lockout if the pump comes back silently and
+# we missed it because we were still sleeping in the longest cooldown.
+FAILURE_RESET_AFTER = 30 * 60.0
 
 
 class PoolComfortCoordinator(DataUpdateCoordinator[PoolDiagnostics]):
@@ -26,19 +31,25 @@ class PoolComfortCoordinator(DataUpdateCoordinator[PoolDiagnostics]):
 
     **Why persistent sessions?**
     The pump firmware has a tiny session table and is very slow to reclaim
-    abandoned slots.  Creating a new session every 30 s poll (the v2.0.0
-    approach) filled the table in under 5 minutes because the pump never
-    freed old slots fast enough.
+    abandoned slots.  Creating a new session every 30 s poll fills the
+    table within minutes because the pump never frees old slots fast
+    enough.  Keeping one long-lived session with keepalive pings is the
+    least-bad option.
 
-    **Strategy**
-    1. Open ONE session with keepalive pings and reuse it for every poll.
-    2. When a query fails (session died), try to reconnect immediately.
-       If that works the pump had a free slot — back to normal.
-    3. If the reconnect *also* fails (table full), enter a 5-minute
-       cooldown so the pump has time to reclaim at least one slot.
-    4. During the cooldown **return the last successful diagnostics**
-       instead of raising ``UpdateFailed``.  Entities keep their last
-       known values (slightly stale) rather than going ``unavailable``.
+    **Polling strategy (gets called every 30 s by HA)**
+    1. Reuse the existing session for the query.
+    2. If that fails (session died), try one immediate reconnect.
+    3. If the reconnect also fails (table full), enter a 1-minute cooldown.
+       Successive failures lengthen the cooldown linearly to 3 minutes.
+    4. After 30 minutes of continuous failure, reset the counter and start
+       trying every minute again — avoids permanent lockout.
+    5. During any failure, return the **last successful diagnostics** so
+       entities stay at their last reading instead of going ``unavailable``.
+
+    **User-initiated SET commands (climate.set_temperature etc.)**
+    Always attempt, regardless of polling cooldown.  The cooldown exists
+    to keep our background polling from flooding the pump — it must not
+    block the user from pressing a button.
     """
 
     def __init__(self, hass: HomeAssistant, host: str, password: str) -> None:
@@ -77,29 +88,48 @@ class PoolComfortCoordinator(DataUpdateCoordinator[PoolDiagnostics]):
 
     def _fetch(self) -> PoolDiagnostics:
         with self._lock:
-            # Fast path — existing session is alive.
-            if self._client is not None:
-                try:
-                    return self._client.query_diagnostics()
-                except (TimeoutError, RuntimeError, OSError) as exc:
-                    _LOGGER.info(
-                        "Pool Comfort session lost (%s), reconnecting", exc,
-                    )
-                    self._close_client()
+            client = self._get_or_open_client(respect_cooldown=True)
+            try:
+                return client.query_diagnostics()
+            except (TimeoutError, RuntimeError, OSError) as exc:
+                _LOGGER.info(
+                    "Pool Comfort query failed (%s), session will be reopened next poll", exc,
+                )
+                self._close_client()
+                raise
 
-            # Need a (new) session.
-            return self._open_and_query()
+    def _get_or_open_client(self, *, respect_cooldown: bool) -> PoolComfortClient:
+        """Return a live client, opening a new session if needed.
 
-    def _open_and_query(self) -> PoolDiagnostics:
-        """Open a fresh session and run a single diagnostics query."""
+        Set ``respect_cooldown=False`` for user-initiated actions: we always
+        try at least once so a button press isn't silently rejected.
+        """
+        if self._client is not None:
+            return self._client
+
         now = time.monotonic()
-        if self._connect_failures > 0:
+
+        # If we've been stuck failing for a while, forgive the old failures
+        # and treat this as a fresh attempt.  Otherwise we'd sit forever in
+        # the 3-minute cooldown after the pump came back.
+        if (
+            self._connect_failures > 0
+            and now - self._last_connect_attempt > FAILURE_RESET_AFTER
+        ):
+            _LOGGER.info(
+                "Pool Comfort: forgiving %d old failures after %.0f min idle",
+                self._connect_failures,
+                (now - self._last_connect_attempt) / 60,
+            )
+            self._connect_failures = 0
+
+        if respect_cooldown and self._connect_failures > 0:
             cooldown = self._reconnect_cooldown()
             elapsed = now - self._last_connect_attempt
             if elapsed < cooldown:
                 raise RuntimeError(
-                    f"session cooldown: {cooldown - elapsed:.0f}s remaining "
-                    f"(attempt {self._connect_failures})"
+                    f"reconnect cooldown: {cooldown - elapsed:.0f}s remaining "
+                    f"(failure #{self._connect_failures})"
                 )
 
         self._last_connect_attempt = now
@@ -114,19 +144,16 @@ class PoolComfortCoordinator(DataUpdateCoordinator[PoolDiagnostics]):
         except Exception:
             self._connect_failures += 1
             _LOGGER.warning(
-                "Failed to open Pool Comfort session to %s (attempt %d, "
-                "next retry in %.0fs)",
-                self.host,
+                "Pool Comfort connect failed (#%d), next poll retry in %.0fs",
                 self._connect_failures,
                 self._reconnect_cooldown(),
             )
             raise
 
-        # Connected — reset failure counter, attach client.
         self._connect_failures = 0
         self._client = client
         _LOGGER.info("Pool Comfort session opened to %s", self.host)
-        return client.query_diagnostics()
+        return client
 
     def _close_client(self) -> None:
         if self._client is not None:
@@ -139,11 +166,10 @@ class PoolComfortCoordinator(DataUpdateCoordinator[PoolDiagnostics]):
     def _reconnect_cooldown(self) -> float:
         if self._connect_failures <= 0:
             return 0
-        # 5 min → 10 min cap.  Only two steps because the pump either
-        # frees a slot within 5-10 minutes or it needs a power-cycle.
+        # Linear: 1 min, 2 min, 3 min — capped at 3 min.
         return min(
             RECONNECT_MAX_COOLDOWN,
-            RECONNECT_BASE_COOLDOWN * (2 ** min(self._connect_failures - 1, 1)),
+            RECONNECT_BASE_COOLDOWN * self._connect_failures,
         )
 
     # ------------------------------------------------------------------
@@ -156,7 +182,7 @@ class PoolComfortCoordinator(DataUpdateCoordinator[PoolDiagnostics]):
 
     def _apply(self, action) -> None:
         with self._lock:
-            # Try using the existing session first.
+            # First try the existing session — fast path.
             if self._client is not None:
                 try:
                     action(self._client)
@@ -164,30 +190,14 @@ class PoolComfortCoordinator(DataUpdateCoordinator[PoolDiagnostics]):
                 except (TimeoutError, RuntimeError, OSError):
                     self._close_client()
 
-            # Fall back to a fresh session.
-            now = time.monotonic()
-            if self._connect_failures > 0:
-                cooldown = self._reconnect_cooldown()
-                elapsed = now - self._last_connect_attempt
-                if elapsed < cooldown:
-                    raise RuntimeError(
-                        f"session cooldown: {cooldown - elapsed:.0f}s remaining"
-                    )
-            self._last_connect_attempt = now
-            client = PoolComfortClient(
-                self.host,
-                password=self.password,
-                timeout=DEFAULT_TIMEOUT,
-                keepalive=True,
-            )
+            # Open a fresh session.  User actions bypass the polling
+            # cooldown so a button press never silently dies waiting.
+            client = self._get_or_open_client(respect_cooldown=False)
             try:
-                client.connect()
-            except Exception:
-                self._connect_failures += 1
+                action(client)
+            except (TimeoutError, RuntimeError, OSError):
+                self._close_client()
                 raise
-            self._connect_failures = 0
-            self._client = client
-            action(client)
 
     # ------------------------------------------------------------------
     # Cleanup (integration unload)
