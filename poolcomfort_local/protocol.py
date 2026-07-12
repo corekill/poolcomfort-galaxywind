@@ -269,13 +269,21 @@ def _decode_pool_state_block(words: list[int]) -> dict[str, Any]:
             decoded["run_state_name"] = POOL_RUN_STATES[run_state]
 
     # Pool Comfort's Android app builds "Working details" from TbCommercialStat.
-    # On this firmware the live 0x0015 block lines up with pump_info at word 22
-    # and fault2/switch status at word 24. Keep the raw words exposed so new
-    # devices can confirm or correct these positions without losing data.
+    # Live outputs come from pump_info at word 22.  Words 23-25 are the
+    # set_on/set_on1/set_on2 visibility masks (constant per configuration;
+    # w23=0x0703 and w24=0x1b59 match exactly the bits HtchpPoolDev uses to
+    # decide which rows to show).  The five protection switches read from the
+    # fault2 register, where a SET bit means the protection tripped: the app
+    # renders TYPE_CONNECT rows as value == 0 -> "on" (HtcHpDetailActivity),
+    # so a healthy pump shows every switch "on" while the fault words stay 0.
+    # fault1..fault3 sit after word 26; the middle word is fault2 (structural
+    # guess, to be confirmed from the first captured real fault).
     if len(words) > 24:
         pump_info = words[22] & 0xFFFF
-        fault2 = words[24] & 0xFFFF
+        fault2 = words[28] & 0xFFFF if len(words) > 28 else 0
         decoded["pump_info_bits"] = pump_info
+        decoded["set_on_bits"] = words[23] & 0xFFFF
+        decoded["set_on1_bits"] = words[24] & 0xFFFF
         decoded["fault2_bits"] = fault2
         decoded["working_details"] = {
             "compressor": _bit(pump_info, 0),
@@ -285,11 +293,13 @@ def _decode_pool_state_block(words: list[int]) -> dict[str, Any]:
             "circulation_pump": _bit(pump_info, 7),
             "electric_heating": _bit(pump_info, 4),
             "bottom_heater": _bit(pump_info, 5),
-            "low_pressure_switch": _bit(fault2, 7),
-            "high_pressure_switch": _bit(fault2, 3),
-            "emergency_switch": _bit(fault2, 0),
-            "waterflow_switch": _bit(fault2, 2),
-            "phase_protection": _bit(fault2, 1),
+            # Protection switches: fault2 bit set = tripped, so "on" (OK,
+            # circuit closed) is the inverse — mirrors the official app.
+            "low_pressure_switch": not _bit(fault2, 7),
+            "high_pressure_switch": not _bit(fault2, 3),
+            "emergency_switch": not _bit(fault2, 0),
+            "waterflow_switch": not _bit(fault2, 2),
+            "phase_protection": not _bit(fault2, 1),
         }
     return decoded
 

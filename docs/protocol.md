@@ -47,10 +47,25 @@ Known attributes:
   - word 2 = water outlet temperature * 10
   - word 3 = ambient temperature * 10
   - word 6 = slave/run-state bitfield
-  - word 22 = likely `pump_info`, used for compressor, four-way valve, high/low
-    fan speed, circulation pump, electric heating, and bottom heater
-  - word 24 = likely `fault2`/switch state, used for low/high pressure,
-    emergency, waterflow, and phase switches
+  - word 22 = `pump_info` (confirmed live), used for compressor, four-way
+    valve, high/low fan speed, circulation pump, electric heating, and bottom
+    heater
+  - word 23 = `set_on` visibility mask (observed constant `0x0703`; bits 0/1
+    and 8/9/10 match exactly which protection-switch rows
+    `HtchpPoolDev.getWorkItems()` displays)
+  - word 24 = `set_on1` visibility mask (observed constant `0x1b59`; bits
+    0/3/4/6 gate the water pump, electric heating, fan and bottom heater rows).
+    Earlier revisions misread this word as `fault2` — it never changes, which
+    made the five switch sensors static.
+  - word 25 = `set_on2` (observed constant `0x000f`)
+  - words 27-29 = `fault1`..`fault3` (all zero on a healthy pump; observed
+    zero across a month of samples including full heating days). The five
+    protection switches (low/high pressure, emergency, waterflow, phase) read
+    from `fault2` = word 28 with INVERTED semantics: bit set = protection
+    tripped. The official app renders these rows as `value == 0 -> "on"`
+    (`HtcHpDetailActivity`, TYPE_CONNECT), so a healthy pump shows all
+    switches "on". Word 28 within the 27-29 run is a structural guess until a
+    real fault is captured.
 - `0x0016`: target temperature
 - `0x0017`: mode, first byte: `0=auto`, `1=cooling`, `2=heating`, `3=warm`
 - `0x0018`: power, first byte: `0=off`, `1=on`

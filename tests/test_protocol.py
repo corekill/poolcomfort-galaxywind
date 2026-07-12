@@ -149,7 +149,10 @@ def test_parse_pool_working_details_from_state_block():
     words[3] = 190
     words[6] = 1 << 1
     words[22] = (1 << 0) | (1 << 7) | (1 << 9) | (1 << 10) | (1 << 11)
-    words[24] = (1 << 2) | (1 << 3)
+    # set_on / set_on1 visibility masks as seen on real hardware.
+    words[23] = 0x0703
+    words[24] = 0x1B59
+    # fault words all zero — healthy pump.
     payload = (
         bytes.fromhex("080d0000")
         + bytes.fromhex("0002000d00150044")
@@ -159,10 +162,37 @@ def test_parse_pool_working_details_from_state_block():
     decoded = diagnostics.attributes["0x0015"]["decoded"]
     details = decoded["working_details"]
     assert decoded["run_state_name"] == "heating"
+    assert decoded["set_on_bits"] == 0x0703
+    assert decoded["set_on1_bits"] == 0x1B59
     assert details["compressor"] is True
     assert details["high_fan_speed"] is True
     assert details["low_fan_speed"] is False
     assert details["circulation_pump"] is True
     assert details["four_way_valve"] is True
+    # No fault bits set -> every protection switch reads "on" (OK), the way
+    # the official app renders TYPE_CONNECT rows (value 0 -> "on").
     assert details["waterflow_switch"] is True
     assert details["high_pressure_switch"] is True
+    assert details["low_pressure_switch"] is True
+    assert details["emergency_switch"] is True
+    assert details["phase_protection"] is True
+
+
+def test_parse_pool_working_details_reports_tripped_protection():
+    words = [0] * 34
+    words[6] = 1 << 1
+    words[22] = 1 << 7
+    # fault2 (word 28): waterflow (bit 2) and low pressure (bit 7) tripped.
+    words[28] = (1 << 2) | (1 << 7)
+    payload = (
+        bytes.fromhex("080d0000")
+        + bytes.fromhex("0002000d00150044")
+        + struct.pack(">34h", *words)
+    )
+    diagnostics = parse_pool_diagnostics(payload)
+    details = diagnostics.attributes["0x0015"]["decoded"]["working_details"]
+    assert details["waterflow_switch"] is False
+    assert details["low_pressure_switch"] is False
+    assert details["high_pressure_switch"] is True
+    assert details["emergency_switch"] is True
+    assert details["phase_protection"] is True
