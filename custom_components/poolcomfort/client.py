@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import hashlib
+import logging
 import os
 import socket
 import threading
@@ -51,6 +52,14 @@ def build_proto_tag(now: time.struct_time | None = None) -> bytes:
 PUMP_PROBE_OP = b"\x07"
 
 KEEPALIVE_INTERVAL = 1.5
+
+# UDP gives no delivery guarantee; on weak Wi-Fi a single lost datagram would
+# otherwise fail the whole poll.  Retransmit the same packet (same sequence
+# number, same session) a couple of times before giving up.
+SEND_ATTEMPTS = 3
+SEND_RETRY_DELAY = 0.25
+
+_LOGGER = logging.getLogger(__name__)
 
 
 def discover_hosts(timeout: float = 2.0) -> list[str]:
@@ -239,21 +248,43 @@ class PoolComfortClient:
     def _send(self, packet: Packet) -> Packet:
         if self._sock is None:
             raise RuntimeError("client is not connected")
+        # Never retransmit handshake packets: the pump may treat a duplicated
+        # login as a second client and burn another slot in its tiny session
+        # table.  A lost handshake reply simply fails the connect, which the
+        # caller handles with its own cooldown.
+        attempts = 1 if packet.message_type == MSG_HANDSHAKE_1 else SEND_ATTEMPTS
         key = (packet.sequence, packet.message_type)
+        # One pending slot for the whole retry cycle: a late reply to an
+        # earlier transmission carries the same sequence number and must
+        # still be accepted while we wait on a retransmit.
         slot = _Pending(event=threading.Event())
         with self._pending_lock:
             self._pending[key] = slot
         try:
-            with self._send_lock:
-                if self._sock is None:
-                    raise RuntimeError("client is not connected")
-                self._sock.sendto(packet.build(), (self.host, CONTROL_PORT))
-                self._last_send = time.monotonic()
-            if not slot.event.wait(self.timeout):
-                raise TimeoutError("no response from heat pump")
-            if slot.reply is None:
-                raise RuntimeError("client closed during send")
-            return slot.reply
+            for attempt in range(1, attempts + 1):
+                with self._send_lock:
+                    if self._sock is None:
+                        raise RuntimeError("client is not connected")
+                    self._sock.sendto(packet.build(), (self.host, CONTROL_PORT))
+                    self._last_send = time.monotonic()
+                if slot.event.wait(self.timeout):
+                    if slot.reply is None:
+                        raise RuntimeError("client closed during send")
+                    return slot.reply
+                if attempt < attempts:
+                    _LOGGER.debug(
+                        "No reply for packet seq=%d type=0x%04x within %.1fs, "
+                        "retransmitting (attempt %d/%d)",
+                        packet.sequence,
+                        packet.message_type,
+                        self.timeout,
+                        attempt + 1,
+                        attempts,
+                    )
+                    time.sleep(SEND_RETRY_DELAY)
+            raise TimeoutError(
+                f"no response from heat pump after {attempts} attempts"
+            )
         finally:
             with self._pending_lock:
                 self._pending.pop(key, None)
