@@ -3,7 +3,11 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from homeassistant.components.binary_sensor import BinarySensorEntity, BinarySensorEntityDescription
+from homeassistant.components.binary_sensor import (
+    BinarySensorDeviceClass,
+    BinarySensorEntity,
+    BinarySensorEntityDescription,
+)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
@@ -48,6 +52,7 @@ async def async_setup_entry(
     async_add_entities(
         PoolComfortBinarySensor(coordinator, entry, desc) for desc in BINARY_SENSOR_DESCRIPTIONS
     )
+    async_add_entities([PoolComfortConnectionSensor(coordinator, entry)])
 
 
 class PoolComfortBinarySensor(CoordinatorEntity[PoolComfortCoordinator], BinarySensorEntity):
@@ -73,3 +78,46 @@ class PoolComfortBinarySensor(CoordinatorEntity[PoolComfortCoordinator], BinaryS
         if self.coordinator.data is None:
             return None
         return self.entity_description.value_fn(self.coordinator.data)
+
+
+class PoolComfortConnectionSensor(
+    CoordinatorEntity[PoolComfortCoordinator], BinarySensorEntity
+):
+    """Whether the readings you are looking at are actually live.
+
+    Every other entity holds its last value while the pump is unreachable,
+    so without this one a wedged pump is indistinguishable from a pump that
+    is simply sitting still.  Use it to drive notifications and to guard
+    automations that act on water temperature.
+    """
+
+    _attr_has_entity_name = True
+    _attr_name = "Connection"
+    _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, coordinator: PoolComfortCoordinator, entry: ConfigEntry) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{entry.entry_id}_connection"
+        serial = coordinator.data.state.serial if coordinator.data else None
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, serial or entry.entry_id)},
+        )
+
+    @property
+    def available(self) -> bool:
+        return True
+
+    @property
+    def is_on(self) -> bool:
+        return self.coordinator.is_connected
+
+    @property
+    def extra_state_attributes(self) -> dict[str, object]:
+        age = self.coordinator.data_age
+        return {
+            "data_age_seconds": None if age is None else round(age),
+            "consecutive_failures": self.coordinator.consecutive_failures,
+            "sessions_opened": self.coordinator.sessions_opened,
+            "last_error": self.coordinator.last_error,
+        }

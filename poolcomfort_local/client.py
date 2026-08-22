@@ -51,7 +51,11 @@ def build_proto_tag(now: time.struct_time | None = None) -> bytes:
 # but the device sends it when it stops hearing from us; respond with a normal ping echo.
 PUMP_PROBE_OP = b"\x07"
 
-KEEPALIVE_INTERVAL = 1.5
+# Matches the official app: captures of live sessions show the app and the
+# pump each pinging every 3.0 s.  We used to ping twice that often, which
+# doubled the traffic a session puts through the pump's firmware for no
+# protocol reason.
+KEEPALIVE_INTERVAL = 3.0
 
 # UDP gives no delivery guarantee; on weak Wi-Fi a single lost datagram would
 # otherwise fail the whole poll.  Retransmit the same packet (same sequence

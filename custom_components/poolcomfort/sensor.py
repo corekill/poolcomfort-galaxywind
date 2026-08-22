@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import datetime
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -89,6 +90,43 @@ SENSOR_DESCRIPTIONS: tuple[PoolComfortSensorDescription, ...] = (
 )
 
 
+@dataclass(frozen=True, kw_only=True)
+class PoolComfortHealthSensorDescription(SensorEntityDescription):
+    """Sensor fed by the coordinator's own health state, not by pump data.
+
+    Readings are deliberately held at their last value while the pump is
+    unreachable, so these are the only entities that can tell you whether
+    what you are looking at is live.
+    """
+
+    value_fn: Callable[[PoolComfortCoordinator], datetime | int | str | None]
+
+
+HEALTH_SENSOR_DESCRIPTIONS: tuple[PoolComfortHealthSensorDescription, ...] = (
+    PoolComfortHealthSensorDescription(
+        key="last_successful_update",
+        name="Last successful update",
+        device_class=SensorDeviceClass.TIMESTAMP,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda c: c.last_success,
+    ),
+    PoolComfortHealthSensorDescription(
+        key="consecutive_failures",
+        name="Consecutive failed polls",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda c: c.consecutive_failures,
+    ),
+    PoolComfortHealthSensorDescription(
+        key="sessions_opened",
+        name="Sessions opened",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        value_fn=lambda c: c.sessions_opened,
+    ),
+)
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -96,6 +134,10 @@ async def async_setup_entry(
 ) -> None:
     coordinator: PoolComfortCoordinator = hass.data[DOMAIN][entry.entry_id]
     async_add_entities(PoolComfortSensor(coordinator, entry, desc) for desc in SENSOR_DESCRIPTIONS)
+    async_add_entities(
+        PoolComfortHealthSensor(coordinator, entry, desc)
+        for desc in HEALTH_SENSOR_DESCRIPTIONS
+    )
 
 
 class PoolComfortSensor(CoordinatorEntity[PoolComfortCoordinator], SensorEntity):
@@ -121,3 +163,32 @@ class PoolComfortSensor(CoordinatorEntity[PoolComfortCoordinator], SensorEntity)
         if self.coordinator.data is None:
             return None
         return self.entity_description.value_fn(self.coordinator.data)
+
+
+class PoolComfortHealthSensor(CoordinatorEntity[PoolComfortCoordinator], SensorEntity):
+    _attr_has_entity_name = True
+    entity_description: PoolComfortHealthSensorDescription
+
+    def __init__(
+        self,
+        coordinator: PoolComfortCoordinator,
+        entry: ConfigEntry,
+        description: PoolComfortHealthSensorDescription,
+    ) -> None:
+        super().__init__(coordinator)
+        self.entity_description = description
+        self._attr_unique_id = f"{entry.entry_id}_{description.key}"
+        serial = coordinator.data.state.serial if coordinator.data else None
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, serial or entry.entry_id)},
+        )
+
+    @property
+    def available(self) -> bool:
+        # Describes the integration rather than the pump, so it stays
+        # readable even when the pump has never answered.
+        return True
+
+    @property
+    def native_value(self) -> datetime | int | str | None:
+        return self.entity_description.value_fn(self.coordinator)
